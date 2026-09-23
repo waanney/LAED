@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "note": "Pin exact revisions, licenses and SHA-256 values before enabling production mode.",
+  "models": [
+    {
+      "stage": "asr",
+      "id": "whisper-tiny-multilingual",
+      "runtime": "whisper.cpp",
+      "path": "whisper/ggml-tiny.bin",
+      "revision": "REQUIRED",
+      "sha256": "REQUIRED",
+      "input_audio": "PCM_S16LE mono 16000 Hz",
+      "license": "VERIFY_MODEL_AND_DATASET"
+    },
+    {
+      "stage": "llm",
+      "id": "Qwen3-0.6B",
+      "runtime": "llama.cpp",
+      "path": "qwen3/model.gguf",
+      "revision": "REQUIRED",
+      "sha256": "REQUIRED",
+      "quantization": "Q4_K_M",
+      "context_tokens": 2048,
+      "max_output_tokens": 96,
+      "license": "VERIFY_MODEL"
+    },
+    {
+      "stage": "tts",
+      "id": "vi_VN-vais1000-medium",
+      "runtime": "sherpa-onnx",
+      "path": "tts-vais1000/",
+      "revision": "REQUIRED",
+      "sha256": "REQUIRED_PER_FILE",
+      "output_audio": "model-native sample rate",
+      "license": "VERIFY_MODEL_AND_DATASET"
+    }
+  ]
+}
+

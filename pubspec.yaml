@@ -1,0 +1,27 @@
+name: laed
+description: Offline speech-to-speech Flutter UI backed by a shared Rust core.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  audioplayers: ^6.8.1
+  flutter_rust_bridge: ^2.13.0
+  path_provider: ^2.1.6
+  provider: ^6.1.5+1
+  record: ^7.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/model-manifest.example.json
+

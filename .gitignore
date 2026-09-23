@@ -1,0 +1,29 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+pubspec_overrides.yaml
+
+# IDE / OS
+*.iml
+.idea/
+.vscode/
+.DS_Store
+
+# Rust
+rust/target/
+
+# Generated flutter_rust_bridge glue
+lib/src/rust/frb_generated.dart
+lib/src/rust/frb_generated.io.dart
+lib/src/rust/frb_generated.web.dart
+rust/src/frb_generated.rs
+
+# Model weights never belong in Git/APK/IPA
+models/
+*.bin
+*.gguf
+*.onnx

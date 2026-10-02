@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAED Voice — AI English Teacher (Edge0-8B × Kokoro)</title>
+  <meta name="description" content="Ultra-low latency conversational AI English Teacher powered by Edge0-8B and Kokoro TTS.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <div class="app-shell">
+    <!-- Top Navigation -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="22"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Teacher Sarah</span>
+          <span class="brand-tag">Edge0-8B × Kokoro TTS</span>
+        </div>
+      </div>
+
+      <div class="system-status-pills">
+        <div class="status-pill pill-green" id="pill-asr" title="Zipformer Streaming ASR">
+          <span class="indicator-dot"></span> ASR: Zipformer
+        </div>
+        <div class="status-pill pill-cyan" id="pill-llm" title="Edge0 / llama-server MoE">
+          <span class="indicator-dot"></span> LLM: Local Engine
+        </div>
+        <div class="status-pill pill-purple" id="pill-tts" title="Kokoro TTS (af_heart)">
+          <span class="indicator-dot"></span> TTS: Kokoro (af_heart)
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btn-open-settings" class="icon-button" title="Server Connection Settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+        <button id="btn-toggle-transcript" class="icon-button" title="Toggle Chat History">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Voice Stage -->
+    <main class="main-stage">
+      <div class="hero-visualizer-container">
+        <!-- Canvas for 3D Audio Reactive Orb -->
+        <canvas id="visualizer-canvas" width="460" height="460"></canvas>
+
+        <!-- Status Tag Overlay -->
+        <div class="status-overlay">
+          <div id="state-badge" class="state-badge state-idle">
+            <span class="pulse-ring"></span>
+            <span id="state-text">Ready to Talk</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Voice Subtitles -->
+      <div class="live-subtitle-container">
+        <p id="live-user-speech" class="live-user-text"></p>
+        <p id="live-ai-speech" class="live-ai-text">Press the microphone or hold [Space] to start practicing English with Teacher Sarah.</p>
+      </div>
+
+      <!-- Controls & Mic Trigger -->
+      <div class="voice-controls">
+        <div class="mic-button-wrapper">
+          <div class="button-radar" id="mic-radar"></div>
+          <button id="mic-button" class="mic-button" aria-label="Microphone Trigger">
+            <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="control-hints">
+          <span class="shortcut-badge">Spacebar</span>
+          <span id="mic-hint-text">Hold to speak &bull; Release to send</span>
+        </div>
+      </div>
+
+      <!-- Latency Metrics Bar -->
+      <section class="metrics-bar" aria-label="Latency Benchmarks">
+        <div class="metric-card" id="card-metric-asr">
+          <div class="metric-label">ASR Decoded</div>
+          <div class="metric-value" id="val-metric-asr">-- <span class="unit">ms</span></div>
+          <div class="metric-sub">Zipformer 16kHz</div>
+        </div>
+
+        <div class="metric-card" id="card-metric-ttft">
+          <div class="metric-label">Time to 1st Token</div>
+          <div class="metric-value" id="val-metric-ttft">-- <span class="unit">ms</span></div>
+          <div class="metric-sub">Edge0 SSE Stream</div>
+        </div>
+
+        <div class="metric-card" id="card-metric-ttfa">
+          <div class="metric-label">Time to 1st Audio</div>
+          <div class="metric-value accent" id="val-metric-ttfa">-- <span class="unit">ms</span></div>
+          <div class="metric-sub">Pipelined TTS</div>
+        </div>
+
+        <div class="metric-card" id="card-metric-total">
+          <div class="metric-label">Full Turn Latency</div>
+          <div class="metric-value" id="val-metric-total">-- <span class="unit">ms</span></div>
+          <div class="metric-sub">End-to-End Cycle</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Side Chat History Drawer -->
+    <aside class="chat-drawer" id="chat-drawer">
+      <div class="drawer-header">
+        <h2>Dialogue History</h2>
+        <button id="btn-close-drawer" class="icon-button" aria-label="Close Drawer">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="chat-message-list" id="chat-message-list">
+        <div class="chat-empty-state" id="chat-empty-state">
+          <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <p>No conversation yet. Speak into the microphone to begin.</p>
+        </div>
+      </div>
+
+      <!-- Quick Text Input Fallback -->
+      <div class="drawer-footer">
+        <form id="text-chat-form" class="text-chat-form">
+          <input type="text" id="text-input" placeholder="Type prompt (if no mic)..." autocomplete="off">
+          <button type="submit" id="text-send-btn" class="send-button" aria-label="Send Text">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- Settings Modal for Vast.ai / Backend Connection -->
+    <div class="modal-backdrop" id="modal-settings">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Backend Server Connection</h3>
+          <button id="btn-close-settings" class="icon-button" aria-label="Close Settings">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">Connect this GitHub Pages interface to your remote AI backend (Vast.ai, Localhost, or Cloudflare Tunnel).</p>
+          <div class="form-group">
+            <label for="input-server-url">Backend Server URL (HTTPS):</label>
+            <input type="url" id="input-server-url" placeholder="https://xxxx.trycloudflare.com or http://localhost:7860">
+            <small class="form-hint">Tip: If hosted on GitHub Pages, the backend must use an HTTPS tunnel (Cloudflare Tunnel or ngrok) to bypass browser Mixed Content blocking.</small>
+          </div>
+          <div class="connection-status-box" id="connection-status-box">
+            <span class="status-indicator-dot" id="modal-status-dot"></span>
+            <span id="modal-status-text">Ready</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-test-connection" class="btn-secondary">Test Ping</button>
+          <button id="btn-save-settings" class="btn-primary">Save & Connect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

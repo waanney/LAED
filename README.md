@@ -48,12 +48,41 @@ model weights are intentionally ignored by Git.
 No audio or transcripts are persisted. The example model manifest uses required placeholders for
 revisions, checksums and licenses; fill and verify them before distributing any weights.
 
-## MVP status
+## Real-Time Speech-to-Speech Pipeline (Edge0 × sherpa-onnx)
 
-- Implemented in source: push-to-talk PCM streaming, six UI phases, cancellation, session clearing,
-  15-second cap, context/output budgets, audio resampling and playback.
-- Awaiting native backend integration: whisper.cpp, llama.cpp/Qwen3 non-thinking template and
-  sherpa-onnx Vietnamese TTS.
-- Later phases: verified model downloader, stage benchmark report, sentence-level LLM/TTS overlap,
-  VAD and barge-in.
+Integrated real-time streaming speech-to-speech assistant powered by:
+- **ASR**: `sherpa-onnx` Streaming Zipformer Transducer (16kHz offline speech-to-text)
+- **VAD**: Silero VAD (real-time voice activity detection)
+- **LLM**: `Edge0-8B` MoE with OpenAI-compatible SSE streaming endpoint
+- **TTS**: `hexgrad/Kokoro-82M` (`af_heart`) high-fidelity 24kHz neural speech
+- **Role**: AI English Teacher (Teacher Sarah) for conversational English practice
+
+### Architecture
+
+```text
+Microphone (16kHz) → Silero VAD → Zipformer ASR → Edge0-8B (Token Stream)
+                                                       ↓ (Sentence Chunker)
+Speaker Output (24kHz) ← Kokoro TTS (af_heart) ← Sentence Queue
+```
+
+### Quick Start
+
+1. **Interactive Web Studio** (Browser UI with Audio Reactive Visualizer):
+   ```bash
+   ./run_web.sh
+   # Open http://127.0.0.1:7860
+   ```
+
+2. **Terminal Voice Chat**:
+   ```bash
+   ./run_s2s.sh
+   ```
+
+3. **Connecting Remote Backend (e.g. Vast.ai GPU)**:
+   ```bash
+   LLM_URL=https://your-vast-ai-tunnel.trycloudflare.com ./run_s2s.sh
+   ```
+
+4. **GitHub Pages Deployment**:
+   The `web/` directory is standalone and can be deployed directly to GitHub Pages. Use the in-app **Settings** modal to connect to your remote backend.
 

@@ -27,3 +27,8 @@ models/
 *.bin
 *.gguf
 *.onnx
+
+# Cloned upstream subtrees
+Edge0/
+sherpa-onnx/
+__pycache__/

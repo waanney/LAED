@@ -74,40 +74,22 @@ class AudioQueuePlayer {
   constructor() {
     this.queue = [];
     this.isPlaying = false;
-    this.playbackAudioCtx = null;
-    this.currentSource = null;
-    this.nextStartTime = 0;
+    this.currentAudio = null;
   }
 
-  ensureAudioContext() {
-    if (!this.playbackAudioCtx) {
-      this.playbackAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (this.playbackAudioCtx.state === 'suspended') {
-      this.playbackAudioCtx.resume();
-    }
-    return this.playbackAudioCtx;
-  }
-
-  async enqueue(base64Wav) {
+  enqueue(base64Wav) {
     try {
-      const actx = this.ensureAudioContext();
-      // Decode base64 to binary ArrayBuffer
-      const binaryString = window.atob(base64Wav);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      // Decode audio data into AudioBuffer
-      const audioBuffer = await actx.decodeAudioData(bytes.buffer.slice(0));
-      this.queue.push(audioBuffer);
+      const audioUrl = `data:audio/wav;base64,${base64Wav}`;
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = audioUrl;
 
+      this.queue.push(audio);
       if (!this.isPlaying) {
         this.playNext();
       }
     } catch (err) {
-      console.warn('Failed to decode audio sentence chunk:', err);
+      console.error('AudioQueue enqueue error:', err);
     }
   }
 
@@ -123,36 +105,34 @@ class AudioQueuePlayer {
     this.isPlaying = true;
     setPhase('speaking');
 
-    const actx = this.ensureAudioContext();
-    const audioBuffer = this.queue.shift();
+    const audio = this.queue.shift();
+    this.currentAudio = audio;
 
-    const source = actx.createBufferSource();
-    source.buffer = audioBuffer;
-
-    // Connect to analyser for reactive visualizer
-    if (analyser) {
-      source.connect(analyser);
-    }
-    source.connect(actx.destination);
-
-    this.currentSource = source;
-
-    source.onended = () => {
-      if (this.currentSource === source) {
-        this.currentSource = null;
-        this.playNext();
-      }
+    audio.onended = () => {
+      this.playNext();
     };
 
-    source.start(0);
+    audio.onerror = (e) => {
+      console.warn('Audio playback error chunk, skipping to next:', e);
+      this.playNext();
+    };
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('Audio playback play() promise rejected:', err);
+        this.playNext();
+      });
+    }
   }
 
   stopAll() {
-    if (this.currentSource) {
+    if (this.currentAudio) {
       try {
-        this.currentSource.stop();
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
       } catch (e) {}
-      this.currentSource = null;
+      this.currentAudio = null;
     }
     this.queue = [];
     this.isPlaying = false;

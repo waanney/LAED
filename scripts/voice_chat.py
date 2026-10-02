@@ -66,6 +66,8 @@ ASR_THREADS = int(os.environ.get("ASR_THREADS", "6"))
 LLM_THREADS = int(os.environ.get("LLM_THREADS", "4"))
 TTS_THREADS = int(os.environ.get("TTS_THREADS", "6"))
 TTS_SID = int(os.environ.get("TTS_SID", "0"))  # 0: af_heart, 1: af_bella, 2: af_nicole, 3: af_sarah, 4: af_sky
+LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "96"))
+
 def resolve_llm_url() -> str:
     env_url = os.environ.get("LLM_URL")
     if env_url:

@@ -19,14 +19,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
 
-# Ensure scripts and sherpa_onnx are in path
+# Ensure scripts directory is in path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-SHERPA_DIR = ROOT / "sherpa-onnx"
-if (SHERPA_DIR / "sherpa-onnx/python").is_dir():
-    sys.path.insert(0, str(SHERPA_DIR / "sherpa-onnx/python"))
-if (SHERPA_DIR / "scripts").is_dir():
-    sys.path.insert(0, str(SHERPA_DIR / "scripts"))
+
+try:
+    import sherpa_onnx
+except ImportError:
+    sherpa_python = ROOT / "sherpa-onnx/sherpa-onnx/python"
+    if sherpa_python.is_dir():
+        sys.path.append(str(sherpa_python))
+    import sherpa_onnx
 
 from voice_chat import (
     create_recognizer,
@@ -42,7 +45,6 @@ from voice_chat import (
     TTS_SID,
     TTS_SPEED,
 )
-import sherpa_onnx
 
 WEB_DIR = Path(__file__).resolve().parent
 PORT = int(os.environ.get("WEB_PORT", "7860"))

@@ -64,7 +64,7 @@ VAD_MODEL = Path(os.environ.get("VAD_MODEL", ROOT / "models/silero_vad.onnx"))
 SAMPLE_RATE = 16000
 ASR_THREADS = int(os.environ.get("ASR_THREADS", "6"))
 LLM_THREADS = int(os.environ.get("LLM_THREADS", "4"))
-TTS_THREADS = int(os.environ.get("TTS_THREADS", "6"))
+TTS_THREADS = int(os.environ.get("TTS_THREADS", "8"))
 TTS_SID = int(os.environ.get("TTS_SID", "0"))  # 0: af_heart, 1: af_bella, 2: af_nicole, 3: af_sarah, 4: af_sky
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "96"))
 
@@ -86,7 +86,7 @@ LLM_MODEL_NAME = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
 VAD_THRESHOLD = float(os.environ.get("VAD_THRESHOLD", "0.5"))
 VAD_SILENCE_SECONDS = float(os.environ.get("VAD_SILENCE_SECONDS", "0.5"))
 VAD_MAX_SPEECH_SECONDS = float(os.environ.get("VAD_MAX_SPEECH_SECONDS", "20"))
-TTS_SPEED = float(os.environ.get("TTS_SPEED", "1.0"))
+TTS_SPEED = float(os.environ.get("TTS_SPEED", "1.15"))
 
 SYSTEM_PROMPT = (
     "You are Sarah, an encouraging and patient native English teacher. "
@@ -113,10 +113,11 @@ def require_files(paths: list[Path]) -> None:
 class SentenceChunker:
     """Buffers incoming streaming tokens and yields ready-to-speak sentences."""
 
-    def __init__(self, min_chars: int = 15):
+    def __init__(self, min_chars: int = 12):
         self.buffer = ""
         self.min_chars = min_chars
         self.in_think = False
+        self.first_chunk_sent = False
 
     def push(self, token: str) -> list[str]:
         self.buffer += token
@@ -133,17 +134,29 @@ class SentenceChunker:
 
         sentences = []
         while True:
+            # Sub-500ms TTFA: Dispatch first chunk as soon as we have a clause break (>= 22 chars)
+            if not self.first_chunk_sent and len(self.buffer) >= 22:
+                early_clause = re.search(r"([,;:!?\n]+)(\s+|$)", self.buffer)
+                if early_clause:
+                    end_idx = early_clause.end()
+                    candidate = self.buffer[:end_idx].strip()
+                    sentences.append(candidate)
+                    self.buffer = self.buffer[end_idx:].lstrip()
+                    self.first_chunk_sent = True
+                    continue
+
             # Look for sentence boundary: [.!?\n] followed by whitespace or end
             match = re.search(r"([.!?\n]+)(\s+|$)", self.buffer)
             if not match:
-                # If buffer is getting very long (>65 chars) and has a clause break (, or ;), split it
-                if len(self.buffer) > 65:
-                    clause_match = re.search(r"([,;]+)(\s+)", self.buffer)
+                # If buffer is getting long (>48 chars) and has a clause break (, or ;), split it
+                if len(self.buffer) > 48:
+                    clause_match = re.search(r"([,;:]+)(\s+)", self.buffer)
                     if clause_match:
                         end_idx = clause_match.end()
                         candidate = self.buffer[:end_idx].strip()
                         sentences.append(candidate)
                         self.buffer = self.buffer[end_idx:].lstrip()
+                        self.first_chunk_sent = True
                         continue
                 break
 

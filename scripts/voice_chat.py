@@ -66,9 +66,20 @@ ASR_THREADS = int(os.environ.get("ASR_THREADS", "6"))
 LLM_THREADS = int(os.environ.get("LLM_THREADS", "4"))
 TTS_THREADS = int(os.environ.get("TTS_THREADS", "6"))
 TTS_SID = int(os.environ.get("TTS_SID", "0"))  # 0: af_heart, 1: af_bella, 2: af_nicole, 3: af_sarah, 4: af_sky
-LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "96"))
+def resolve_llm_url() -> str:
+    env_url = os.environ.get("LLM_URL")
+    if env_url:
+        return env_url
+    for port in (11434, 18080, 8000):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=0.3):
+                return f"http://127.0.0.1:{port}"
+        except Exception:
+            pass
+    return f"http://127.0.0.1:{os.environ.get('LLM_PORT', '18080')}"
+
 LLM_PORT = int(os.environ.get("LLM_PORT", "18080"))
-LLM_URL = os.environ.get("LLM_URL", f"http://127.0.0.1:{LLM_PORT}")
+LLM_URL = resolve_llm_url()
 LLM_MODEL_NAME = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
 VAD_THRESHOLD = float(os.environ.get("VAD_THRESHOLD", "0.5"))
 VAD_SILENCE_SECONDS = float(os.environ.get("VAD_SILENCE_SECONDS", "0.5"))

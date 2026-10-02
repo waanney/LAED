@@ -108,10 +108,11 @@ TTS_SPEED = float(os.environ.get("TTS_SPEED", "1.15"))
 SYSTEM_PROMPT = (
     "You are Sarah, an encouraging and patient native English teacher. "
     "Your sole mission is to help the student practice spoken English naturally. "
-    "Always communicate strictly in natural, conversational English. "
-    "Keep your spoken responses short and natural, exactly 1 to 2 sentences (maximum 35 words). "
-    "If the student makes any grammatical, vocabulary, or phrasing errors, "
-    "first gently correct them in a friendly manner, then ask a brief follow-up question. "
+    "Always communicate strictly in natural, conversational English with smooth flowing sentences. "
+    "Keep your spoken responses short, concise, and natural, exactly 1 to 2 complete sentences (maximum 30 words). "
+    "Speak smoothly and avoid choppy fragments or unnecessary commas. "
+    "If the student makes any grammatical or vocabulary errors, "
+    "gently correct them in a friendly manner, then ask an engaging follow-up question. "
     "Never use emojis, markdown, asterisks, bullet points, or special characters, "
     "as your text is directly synthesized into real-time speech."
 )
@@ -128,9 +129,9 @@ def require_files(paths: list[Path]) -> None:
 
 
 class SentenceChunker:
-    """Buffers incoming streaming tokens and yields ready-to-speak sentences."""
+    """Buffers incoming streaming tokens and yields ready-to-speak sentences without awkward pauses."""
 
-    def __init__(self, min_chars: int = 12):
+    def __init__(self, min_chars: int = 35):
         self.buffer = ""
         self.min_chars = min_chars
         self.in_think = False
@@ -151,51 +152,46 @@ class SentenceChunker:
 
         sentences = []
         while True:
-            # Sub-500ms TTFA: Dispatch first chunk as soon as we have a clause break (>= 22 chars)
-            if not self.first_chunk_sent and len(self.buffer) >= 22:
-                early_clause = re.search(r"([,;:!?\n]+)(\s+|$)", self.buffer)
-                if early_clause:
-                    end_idx = early_clause.end()
-                    candidate = self.buffer[:end_idx].strip()
+            # 1. Look for true sentence boundary: [.!?\n] followed by space or end
+            match = re.search(r"([.!?\n]+)(\s+|$)", self.buffer)
+            if match:
+                end_idx = match.end()
+                candidate = self.buffer[:end_idx].strip()
+
+                # Ignore abbreviations like Dr., Mr., etc.
+                words = candidate.split()
+                last_word = words[-1].lower() if words else ""
+                if last_word in ABBREVIATIONS:
+                    break
+
+                # Ignore decimal numbers like 3.14
+                if re.search(r"\d+\.\d*$", candidate):
+                    break
+
+                # Only split if sentence is reasonably complete (at least 20 chars) or explicit newline
+                # This prevents splitting on single words like "Yes." or "Hi." prematurely
+                if len(candidate) >= 20 or match.group(1) == "\n" or len(words) >= 4:
                     sentences.append(candidate)
                     self.buffer = self.buffer[end_idx:].lstrip()
                     self.first_chunk_sent = True
                     continue
+                else:
+                    # Let the buffer accumulate more tokens for a fuller natural sentence
+                    break
 
-            # Look for sentence boundary: [.!?\n] followed by whitespace or end
-            match = re.search(r"([.!?\n]+)(\s+|$)", self.buffer)
-            if not match:
-                # If buffer is getting long (>48 chars) and has a clause break (, or ;), split it
-                if len(self.buffer) > 48:
-                    clause_match = re.search(r"([,;:]+)(\s+)", self.buffer)
-                    if clause_match:
-                        end_idx = clause_match.end()
-                        candidate = self.buffer[:end_idx].strip()
+            # 2. If buffer has grown very long (> 75 chars) and has a clause break, split gently
+            if len(self.buffer) >= 75:
+                clause_match = re.search(r"([,;:]+)(\s+)", self.buffer)
+                if clause_match:
+                    end_idx = clause_match.end()
+                    candidate = self.buffer[:end_idx].strip()
+                    if len(candidate) >= 30:
                         sentences.append(candidate)
                         self.buffer = self.buffer[end_idx:].lstrip()
                         self.first_chunk_sent = True
                         continue
-                break
 
-            end_idx = match.end()
-            candidate = self.buffer[:end_idx].strip()
-
-            # Ignore abbreviations like Dr. or Mr.
-            words = candidate.split()
-            last_word = words[-1].lower() if words else ""
-            if last_word in ABBREVIATIONS:
-                break
-
-            # Ignore decimal numbers like 3.14
-            if re.search(r"\d+\.\d*$", candidate):
-                break
-
-            # Yield if meets minimum length or is explicit newline
-            if len(candidate) >= self.min_chars or match.group(1) == "\n":
-                sentences.append(candidate)
-                self.buffer = self.buffer[end_idx:].lstrip()
-            else:
-                break
+            break
 
         return sentences
 
@@ -326,7 +322,7 @@ class LocalLlmClient:
             headers={"Content-Type": "application/json"},
         )
 
-        chunker = SentenceChunker(min_chars=12)
+        chunker = SentenceChunker(min_chars=35)
         full_reply: list[str] = []
         ttft: float | None = None
         start_time = time.perf_counter()
@@ -496,7 +492,7 @@ def create_recognizer() -> sherpa_onnx.OnlineRecognizer | sherpa_onnx.OfflineRec
         ROOT / "sherpa-onnx-whisper-small.en",
     ]
     for wdir in whisper_dirs:
-        if not wdir.is_dir():
+        if not wdir.is_dir() or "whisper" not in wdir.name.lower():
             continue
         encoders = list(wdir.glob("*encoder*.onnx"))
         decoders = list(wdir.glob("*decoder*.onnx"))
@@ -527,7 +523,7 @@ def create_recognizer() -> sherpa_onnx.OnlineRecognizer | sherpa_onnx.OfflineRec
         ROOT / "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
     ]
     for sdir in sense_dirs:
-        if not sdir.is_dir():
+        if not sdir.is_dir() or "sense-voice" not in sdir.name.lower():
             continue
         models = [f for f in sdir.glob("*.onnx") if "encoder" not in f.name and "decoder" not in f.name]
         tokens = list(sdir.glob("tokens.txt"))

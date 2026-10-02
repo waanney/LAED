@@ -74,13 +74,40 @@ class AudioQueuePlayer {
   constructor() {
     this.queue = [];
     this.isPlaying = false;
-    this.currentAudio = null;
+    this.playbackAudioCtx = null;
+    this.currentSource = null;
+    this.nextStartTime = 0;
   }
 
-  enqueue(base64Wav) {
-    this.queue.push(base64Wav);
-    if (!this.isPlaying) {
-      this.playNext();
+  ensureAudioContext() {
+    if (!this.playbackAudioCtx) {
+      this.playbackAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (this.playbackAudioCtx.state === 'suspended') {
+      this.playbackAudioCtx.resume();
+    }
+    return this.playbackAudioCtx;
+  }
+
+  async enqueue(base64Wav) {
+    try {
+      const actx = this.ensureAudioContext();
+      // Decode base64 to binary ArrayBuffer
+      const binaryString = window.atob(base64Wav);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      // Decode audio data into AudioBuffer
+      const audioBuffer = await actx.decodeAudioData(bytes.buffer.slice(0));
+      this.queue.push(audioBuffer);
+
+      if (!this.isPlaying) {
+        this.playNext();
+      }
+    } catch (err) {
+      console.warn('Failed to decode audio sentence chunk:', err);
     }
   }
 
@@ -96,29 +123,36 @@ class AudioQueuePlayer {
     this.isPlaying = true;
     setPhase('speaking');
 
-    const base64Wav = this.queue.shift();
-    const audioUrl = `data:audio/wav;base64,${base64Wav}`;
-    this.currentAudio = new Audio(audioUrl);
+    const actx = this.ensureAudioContext();
+    const audioBuffer = this.queue.shift();
 
-    this.currentAudio.onended = () => {
-      this.playNext();
+    const source = actx.createBufferSource();
+    source.buffer = audioBuffer;
+
+    // Connect to analyser for reactive visualizer
+    if (analyser) {
+      source.connect(analyser);
+    }
+    source.connect(actx.destination);
+
+    this.currentSource = source;
+
+    source.onended = () => {
+      if (this.currentSource === source) {
+        this.currentSource = null;
+        this.playNext();
+      }
     };
 
-    this.currentAudio.onerror = (e) => {
-      console.error('Audio playback error', e);
-      this.playNext();
-    };
-
-    this.currentAudio.play().catch((err) => {
-      console.warn('Playback autoplay blocked or failed', err);
-      this.playNext();
-    });
+    source.start(0);
   }
 
   stopAll() {
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio = null;
+    if (this.currentSource) {
+      try {
+        this.currentSource.stop();
+      } catch (e) {}
+      this.currentSource = null;
     }
     this.queue = [];
     this.isPlaying = false;

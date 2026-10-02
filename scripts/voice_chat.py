@@ -19,7 +19,11 @@ from typing import Callable, Generator
 
 import numpy as np
 import sherpa_onnx
-import sounddevice as sd
+
+try:
+    import sounddevice as sd
+except Exception:
+    sd = None
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -395,9 +399,9 @@ class StreamingTtsPlayer:
                         self.on_first_audio(time.perf_counter())
                         self._first_audio_fired = True
 
-                    samples = np.asarray(audio.samples, dtype=np.float32)
-                    sd.play(samples, self.sample_rate)
-                    sd.wait()
+                    if sd is not None:
+                        sd.play(samples, self.sample_rate)
+                        sd.wait()
             except Exception as e:
                 print(f"\n[TTS Error] Failed to play sentence '{clean_text}': {e}", file=sys.stderr)
             finally:
@@ -405,7 +409,8 @@ class StreamingTtsPlayer:
 
     def stop(self) -> None:
         self._stop_event.set()
-        sd.stop()
+        if sd is not None:
+            sd.stop()
 
 
 def create_recognizer() -> sherpa_onnx.OnlineRecognizer:
@@ -524,6 +529,12 @@ def main() -> int:
 
     device = microphone_device()
     turn_counter = 0
+
+    if sd is None:
+        raise RuntimeError(
+            "sounddevice library is required for local CLI mic/speaker audio. "
+            "For cloud/headless servers, please run the Web Studio: python3 web/server.py"
+        )
 
     print("\n[Status] System Ready! Speak into your microphone. (Ctrl+C to exit)\n" + "-" * 64)
     speaking = False

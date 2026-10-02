@@ -41,7 +41,24 @@ def resolve_model_dir(env_name: str, rel_name: str) -> Path:
             return c
     return ROOT / rel_name
 
-ASR_DIR = resolve_model_dir("ASR_DIR", "sherpa-onnx-streaming-zipformer-en-2023-06-26")
+def resolve_default_asr_dir() -> Path:
+    env_path = os.environ.get("ASR_DIR")
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+    for name in [
+        "sherpa-onnx-whisper-base.en",
+        "sherpa-onnx-whisper-tiny.en",
+        "sherpa-onnx-whisper-small.en",
+        "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+        "sherpa-onnx-streaming-zipformer-en-2023-06-26",
+    ]:
+        for prefix in [ROOT, ROOT / "models", ROOT / "sherpa-onnx"]:
+            candidate = prefix / name
+            if candidate.is_dir():
+                return candidate
+    return ROOT / "models" / "sherpa-onnx-whisper-base.en"
+
+ASR_DIR = resolve_default_asr_dir()
 TTS_DIR = resolve_model_dir("TTS_DIR", "vits-piper-en_US-amy-low")
 KOKORO_DIR = resolve_model_dir("KOKORO_DIR", "kokoro-en-v0_19")
 def resolve_default_llm() -> Path:
@@ -444,18 +461,94 @@ class StreamingTtsPlayer:
             sd.stop()
 
 
-def create_recognizer() -> sherpa_onnx.OnlineRecognizer:
-    print("[ASR Engine] Loading streaming Zipformer ASR...")
-    return sherpa_onnx.OnlineRecognizer.from_transducer(
-        tokens=str(ASR_DIR / "tokens.txt"),
-        encoder=str(ASR_DIR / "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx"),
-        decoder=str(ASR_DIR / "decoder-epoch-99-avg-1-chunk-16-left-128.onnx"),
-        joiner=str(ASR_DIR / "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx"),
-        num_threads=ASR_THREADS,
-        sample_rate=SAMPLE_RATE,
-        feature_dim=80,
-        decoding_method="greedy_search",
-        provider=os.environ.get("SHERPA_PROVIDER", "cpu"),
+def create_recognizer() -> sherpa_onnx.OnlineRecognizer | sherpa_onnx.OfflineRecognizer:
+    provider = os.environ.get("SHERPA_PROVIDER", "cpu")
+    num_threads = ASR_THREADS
+
+    # 1. Check OpenAI Whisper models (Best for conversational English, accents, and punctuation)
+    whisper_dirs = [
+        ASR_DIR,
+        ROOT / "models" / "sherpa-onnx-whisper-base.en",
+        ROOT / "sherpa-onnx-whisper-base.en",
+        ROOT / "models" / "sherpa-onnx-whisper-tiny.en",
+        ROOT / "sherpa-onnx-whisper-tiny.en",
+        ROOT / "models" / "sherpa-onnx-whisper-small.en",
+        ROOT / "sherpa-onnx-whisper-small.en",
+    ]
+    for wdir in whisper_dirs:
+        if not wdir.is_dir():
+            continue
+        encoders = list(wdir.glob("*encoder*.onnx"))
+        decoders = list(wdir.glob("*decoder*.onnx"))
+        tokens = list(wdir.glob("*tokens*.txt"))
+        if encoders and decoders and tokens:
+            enc = next((e for e in encoders if "int8" in e.name), encoders[0])
+            dec = next((d for d in decoders if "int8" in d.name), decoders[0])
+            tok = tokens[0]
+            print(f"[ASR Engine] Loading OpenAI Whisper ASR ({wdir.name})...")
+            print(f"             Encoder: {enc.name} | Decoder: {dec.name}")
+            recognizer = sherpa_onnx.OfflineRecognizer.from_whisper(
+                encoder=str(enc),
+                decoder=str(dec),
+                tokens=str(tok),
+                language="en",
+                task="transcribe",
+                num_threads=num_threads,
+                provider=provider,
+            )
+            recognizer._model_name = f"Whisper ({wdir.name})"
+            return recognizer
+
+    # 2. Check SenseVoice models
+    sense_dirs = [
+        ASR_DIR,
+        ROOT / "models" / "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+        ROOT / "models" / "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
+        ROOT / "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+    ]
+    for sdir in sense_dirs:
+        if not sdir.is_dir():
+            continue
+        models = [f for f in sdir.glob("*.onnx") if "encoder" not in f.name and "decoder" not in f.name]
+        tokens = list(sdir.glob("tokens.txt"))
+        if models and tokens:
+            m = next((f for f in models if "int8" in f.name), models[0])
+            print(f"[ASR Engine] Loading FunAudioLLM SenseVoice ASR ({sdir.name})...")
+            recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+                model=str(m),
+                tokens=str(tokens[0]),
+                use_itn=True,
+                num_threads=num_threads,
+                provider=provider,
+            )
+            recognizer._model_name = f"SenseVoice ({sdir.name})"
+            return recognizer
+
+    # 3. Fallback to Zipformer Transducer
+    if (ASR_DIR / "tokens.txt").is_file():
+        enc = ASR_DIR / "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx"
+        dec = ASR_DIR / "decoder-epoch-99-avg-1-chunk-16-left-128.onnx"
+        jnr = ASR_DIR / "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx"
+        if enc.is_file() and dec.is_file() and jnr.is_file():
+            print(f"[ASR Engine] Loading streaming Zipformer ASR ({ASR_DIR.name})...")
+            recognizer = sherpa_onnx.OnlineRecognizer.from_transducer(
+                tokens=str(ASR_DIR / "tokens.txt"),
+                encoder=str(enc),
+                decoder=str(dec),
+                joiner=str(jnr),
+                num_threads=num_threads,
+                sample_rate=SAMPLE_RATE,
+                feature_dim=80,
+                decoding_method="greedy_search",
+                provider=provider,
+            )
+            recognizer._model_name = f"Zipformer ({ASR_DIR.name})"
+            return recognizer
+
+    raise FileNotFoundError(
+        f"No recognized ASR model found in '{ASR_DIR}' or 'models/'.\n"
+        "Please download Whisper Base ASR via:\n"
+        "  cd models && wget https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.en.tar.bz2 && tar xvf sherpa-onnx-whisper-base.en.tar.bz2"
     )
 
 
@@ -514,17 +607,25 @@ def create_vad() -> tuple[sherpa_onnx.VoiceActivityDetector, int]:
     )
 
 
-def recognize(recognizer: sherpa_onnx.OnlineRecognizer, samples: np.ndarray) -> str:
-    stream = recognizer.create_stream()
-    # Provide 0.3s leading silence context
-    stream.accept_waveform(SAMPLE_RATE, np.zeros(int(0.3 * SAMPLE_RATE), dtype=np.float32))
-    stream.accept_waveform(SAMPLE_RATE, samples)
-    # Provide 0.5s trailing silence context to flush final tokens
-    stream.accept_waveform(SAMPLE_RATE, np.zeros(int(0.5 * SAMPLE_RATE), dtype=np.float32))
-    stream.input_finished()
-    while recognizer.is_ready(stream):
+def recognize(recognizer: sherpa_onnx.OnlineRecognizer | sherpa_onnx.OfflineRecognizer, samples: np.ndarray) -> str:
+    if isinstance(recognizer, sherpa_onnx.OfflineRecognizer):
+        stream = recognizer.create_stream()
+        stream.accept_waveform(SAMPLE_RATE, samples)
         recognizer.decode_stream(stream)
-    return recognizer.get_result(stream).strip()
+        text = stream.result.text.strip()
+        text = re.sub(r"<\|.*?\|>", "", text).strip()
+        return text
+    else:
+        stream = recognizer.create_stream()
+        # Provide 0.2s leading silence context
+        stream.accept_waveform(SAMPLE_RATE, np.zeros(int(0.2 * SAMPLE_RATE), dtype=np.float32))
+        stream.accept_waveform(SAMPLE_RATE, samples)
+        # Provide 0.3s trailing silence context to flush final tokens
+        stream.accept_waveform(SAMPLE_RATE, np.zeros(int(0.3 * SAMPLE_RATE), dtype=np.float32))
+        stream.input_finished()
+        while recognizer.is_ready(stream):
+            recognizer.decode_stream(stream)
+        return recognizer.get_result(stream).strip()
 
 
 def microphone_device() -> int | str | None:
@@ -539,17 +640,8 @@ def main() -> int:
     print("      LAED: Streaming Speech-to-Speech (Edge0 + sherpa-onnx)")
     print("=" * 64)
 
-    require_files(
-        [
-            ASR_DIR / "tokens.txt",
-            ASR_DIR / "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
-            ASR_DIR / "decoder-epoch-99-avg-1-chunk-16-left-128.onnx",
-            ASR_DIR / "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
-            TTS_DIR / "en_US-amy-low.onnx",
-            TTS_DIR / "tokens.txt",
-            VAD_MODEL,
-        ]
-    )
+    if not VAD_MODEL.is_file():
+        raise FileNotFoundError(f"Missing Silero VAD model at {VAD_MODEL}. Run scripts/setup_models.sh first.")
 
     recognizer = create_recognizer()
     tts = create_tts()

@@ -3,7 +3,7 @@
 Ultra-low latency conversational AI English Teacher Studio powered by:
 - **LLM**: **Edge0-8B** (or OpenAI-compatible streaming server) with **Teacher Sarah** persona (clear spoken English, gentle mistake corrections, 1–2 sentence conversational pacing).
 - **TTS**: **hexgrad/Kokoro-82M** (24kHz high-fidelity neural voice, `af_heart`).
-- **ASR**: **sherpa-onnx** Streaming Zipformer Transducer (offline 16kHz speech recognition).
+- **ASR**: **sherpa-onnx** OpenAI Whisper Base / SenseVoice / Zipformer (high-accuracy conversational English & accent recognition).
 - **Frontend**: Responsive Single-Page Application (SPA) with 3D audio-reactive orb, live subtitles, latency HUD, and remote backend connectivity (deployable on **GitHub Pages**).
 
 ---
@@ -17,8 +17,8 @@ Ultra-low latency conversational AI English Teacher Studio powered by:
   │      ↓  (POST /api/chat-voice)
 [ Backend Server / Vast.ai GPU ]
   │
-  ├─ 1. Zipformer Streaming ASR (Speech → Text)
-  ├─ 2. Edge0-8B MoE LLM (Prompt: English Teacher Sarah)
+  ├─ 1. Whisper Base ASR (High-accuracy Speech → Text)
+  ├─ 2. Edge0-8B / Llama 3.1 8B LLM (Prompt: English Teacher Sarah)
   │      ↓  (Streaming SSE Tokens)
   ├─ 3. Sentence Chunker ([.!?\n] boundary detection)
   ├─ 4. Kokoro-TTS Engine (Sentence N+1 synthesizes while N plays)
@@ -33,7 +33,7 @@ Ultra-low latency conversational AI English Teacher Studio powered by:
 ## 🚀 Quick Start (Local)
 
 ### 1. Download Model Weights
-Run the automated downloader to fetch Zipformer ASR, Silero VAD, and Kokoro-TTS:
+Run the automated downloader to fetch Whisper Base ASR, Silero VAD, and Kokoro-TTS:
 ```bash
 ./scripts/setup_models.sh
 ```

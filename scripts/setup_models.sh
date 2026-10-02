@@ -15,13 +15,13 @@ else
     echo "silero_vad.onnx already exists."
 fi
 
-echo "=== 2. Downloading Streaming Zipformer English ASR ==="
-if [ ! -d "sherpa-onnx-streaming-zipformer-en-2023-06-26" ]; then
-    curl -SL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2
-    tar -xjf sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2
-    rm -f sherpa-onnx-streaming-zipformer-en-2023-06-26.tar.bz2
+echo "=== 2. Downloading Whisper Base English ASR (High Accuracy) ==="
+if [ ! -d "sherpa-onnx-whisper-base.en" ]; then
+    curl -SL -O https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.en.tar.bz2
+    tar -xjf sherpa-onnx-whisper-base.en.tar.bz2
+    rm -f sherpa-onnx-whisper-base.en.tar.bz2
 else
-    echo "Zipformer ASR already exists."
+    echo "Whisper Base ASR already exists."
 fi
 
 echo "=== 3. Downloading Kokoro-TTS (English, 24kHz High-Fidelity) ==="

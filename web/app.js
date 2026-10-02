@@ -612,9 +612,37 @@ async function checkBackendHealth() {
     const res = await fetch(`${backend}/api/status`);
     if (res.ok) {
       const data = await res.json();
+      if (data.asr_model) {
+        const pillAsr = document.getElementById('pill-asr');
+        if (pillAsr) {
+          const cleanAsr = data.asr_model.replace(/^sherpa-onnx-/, '').replace(/\.tar\.bz2$/, '');
+          pillAsr.innerHTML = `<span class="indicator-dot"></span> ASR: ${cleanAsr}`;
+        }
+      }
+      if (data.llm_model) {
+        const pillLlm = document.getElementById('pill-llm');
+        if (pillLlm) pillLlm.innerHTML = `<span class="indicator-dot"></span> LLM: ${data.llm_model}`;
+      }
       if (data.tts_model) {
         const pillTts = document.getElementById('pill-tts');
         if (pillTts) pillTts.innerHTML = `<span class="indicator-dot"></span> TTS: ${data.tts_model}`;
+      }
+      if (data.gpu) {
+        const pillGpu = document.getElementById('pill-gpu');
+        if (pillGpu) {
+          if (data.gpu.available) {
+            const shortName = data.gpu.name.replace(/^NVIDIA\s+GeForce\s+/, '').replace(/^NVIDIA\s+/, '');
+            const usedGb = (data.gpu.vram_used_mb / 1024).toFixed(1);
+            const totalGb = Math.round(data.gpu.vram_total_mb / 1024);
+            pillGpu.innerHTML = `<span class="indicator-dot"></span> GPU: ${shortName} (${usedGb}G/${totalGb}G)`;
+            pillGpu.className = 'status-pill pill-amber';
+            pillGpu.title = `NVIDIA GPU: ${data.gpu.name} | VRAM: ${data.gpu.vram_used_mb}MB / ${data.gpu.vram_total_mb}MB | Util: ${data.gpu.util_pct}%`;
+          } else {
+            pillGpu.innerHTML = `<span class="indicator-dot"></span> CPU Mode`;
+            pillGpu.className = 'status-pill pill-muted';
+            pillGpu.title = 'No GPU detected; running on CPU';
+          }
+        }
       }
     }
   } catch (_) {}

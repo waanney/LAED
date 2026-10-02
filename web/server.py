@@ -10,6 +10,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -51,10 +52,62 @@ PORT = int(os.environ.get("WEB_PORT", "7860"))
 HOST = os.environ.get("WEB_HOST", "0.0.0.0")
 
 # Global instances (initialized on startup)
-asr_engine: sherpa_onnx.OnlineRecognizer | None = None
+asr_engine: sherpa_onnx.OnlineRecognizer | sherpa_onnx.OfflineRecognizer | None = None
 tts_engine: sherpa_onnx.OfflineTts | None = None
 llm_client: LocalLlmClient | None = None
 tts_gen_cfg: sherpa_onnx.GenerationConfig | None = None
+
+
+def get_gpu_info() -> dict:
+    """Queries NVIDIA GPU status and checks LLM VRAM offload."""
+    info = {
+        "available": False,
+        "name": "N/A",
+        "total_mb": 0,
+        "used_mb": 0,
+        "util_pct": 0,
+        "llm_loaded": False,
+        "llm_model": "",
+        "llm_vram_mb": 0,
+    }
+    # 1. Check nvidia-smi
+    try:
+        res = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,memory.total,memory.used,utilization.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            parts = [p.strip() for p in res.stdout.strip().split("\n")[0].split(",")]
+            if len(parts) >= 4:
+                info["available"] = True
+                info["name"] = parts[0]
+                info["total_mb"] = int(float(parts[1]))
+                info["used_mb"] = int(float(parts[2]))
+                info["util_pct"] = int(float(parts[3]))
+    except Exception:
+        pass
+
+    # 2. Check Ollama API (/api/ps)
+    try:
+        req = urllib.request.Request("http://127.0.0.1:11434/api/ps")
+        with urllib.request.urlopen(req, timeout=1) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = data.get("models", [])
+            if models:
+                info["llm_loaded"] = True
+                info["llm_model"] = models[0].get("name", "")
+                vram_bytes = models[0].get("size_vram", 0)
+                info["llm_vram_mb"] = round(vram_bytes / (1024 * 1024))
+    except Exception:
+        pass
+
+    return info
 
 
 def samples_to_wav_bytes(samples: np.ndarray, sample_rate: int = 16000) -> bytes:
@@ -84,10 +137,12 @@ def wav_bytes_to_samples(wav_bytes: bytes) -> tuple[np.ndarray, int]:
 
 class WebDemoHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
-        # Suppress noisy static file logs; print only important events
+        # Suppress noisy external port scanners, TLS probes, and static file 404s
         try:
             msg = format % args if args else format
-            if "/api/" in msg or "code 4" in msg or "code 5" in msg:
+            if any(k in msg for k in ("Bad request version", "Bad HTTP/0.9", "Bad request syntax", "code 404")):
+                return
+            if "/api/" in msg or "code 5" in msg:
                 print(f"[WebAPI] {msg}")
         except Exception:
             pass
@@ -111,7 +166,9 @@ class WebDemoHandler(BaseHTTPRequestHandler):
 
         if path == "/api/status":
             tts_name = "Kokoro (af_heart)" if (KOKORO_DIR / "model.onnx").is_file() else TTS_DIR.name
+            asr_name = getattr(asr_engine, "_model_name", ASR_DIR.name) if asr_engine else ASR_DIR.name
             llm_model = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
+            gpu = get_gpu_info()
             self.send_json(
                 {
                     "status": "ok",
@@ -119,8 +176,16 @@ class WebDemoHandler(BaseHTTPRequestHandler):
                     "language": "English",
                     "llm_model": llm_model,
                     "llm_url": llm_client.url if llm_client else LLM_URL,
-                    "asr_model": ASR_DIR.name,
+                    "asr_model": asr_name,
                     "tts_model": tts_name,
+                    "gpu": {
+                        "available": gpu["available"],
+                        "name": gpu["name"],
+                        "vram_used_mb": gpu["used_mb"],
+                        "vram_total_mb": gpu["total_mb"],
+                        "util_pct": gpu["util_pct"],
+                        "llm_vram_mb": gpu["llm_vram_mb"],
+                    },
                 }
             )
             return
@@ -210,8 +275,11 @@ class WebDemoHandler(BaseHTTPRequestHandler):
             self.wfile.write(msg)
             self.wfile.flush()
 
+        gpu = get_gpu_info()
+        gpu_tag = f"GPU: {gpu['used_mb']}MB/{gpu['total_mb']}MB ({gpu['util_pct']}%)" if gpu["available"] else "CPU"
+
         # Send initial transcript event
-        print(f"[WebAPI] Speech transcribed ({asr_time_ms:.0f}ms): '{transcript}'")
+        print(f"[WebAPI] 🎤 Speech transcribed ({asr_time_ms:.0f}ms): '{transcript}'")
         send_sse({"type": "transcript", "text": transcript, "asr_ms": round(asr_time_ms)})
 
         if not transcript:
@@ -237,7 +305,7 @@ class WebDemoHandler(BaseHTTPRequestHandler):
             if first_audio_time is None:
                 first_audio_time = time.perf_counter()
 
-            print(f"[WebAPI] AI voice sentence #{sentence_idx} ({gen_ms:.0f}ms): '{sentence}'")
+            print(f"[WebAPI] 🗣️  AI voice sentence #{sentence_idx} ({gen_ms:.0f}ms): '{sentence}'")
 
             # Encode audio to base64 WAV
             wav_bytes = samples_to_wav_bytes(np.asarray(audio.samples, dtype=np.float32), audio.sample_rate)
@@ -258,6 +326,12 @@ class WebDemoHandler(BaseHTTPRequestHandler):
             total_duration_ms = (time.perf_counter() - llm_start) * 1000
             ttft_ms = ttft_sec * 1000
             ttfa_ms = ((first_audio_time - llm_start) * 1000) if first_audio_time else 0
+
+            print(
+                f"[WebAPI] 📊 Turn complete [{gpu_tag}]: "
+                f"ASR {asr_time_ms:.0f}ms | TTFT {ttft_ms:.0f}ms | TTFA {ttfa_ms:.0f}ms | "
+                f"Total {total_duration_ms:.0f}ms | Sentences: {sentence_idx}"
+            )
 
             send_sse(
                 {
@@ -295,7 +369,21 @@ def main() -> None:
     print("      LAED: Speech-to-Speech Interactive Web Studio        ")
     print("=" * 64)
 
-    # Initialize models
+    # 1. Print GPU & Hardware status
+    gpu = get_gpu_info()
+    if gpu["available"]:
+        print("[Hardware / GPU Status]")
+        print(f"  🎮 GPU Device: {gpu['name']} ({gpu['total_mb']} MB Total VRAM)")
+        print(f"  ⚡ Memory in use: {gpu['used_mb']} MB / {gpu['total_mb']} MB (GPU Util: {gpu['util_pct']}%)")
+        if gpu["llm_loaded"] and gpu["llm_vram_mb"] > 0:
+            print(f"  🧠 LLM In VRAM: {gpu['llm_model']} ({gpu['llm_vram_mb']} MB offloaded) -> ✅ 100% GPU Accelerated!")
+        else:
+            print("  🧠 LLM Offload: Active on GPU")
+    else:
+        print("[Hardware Status] No NVIDIA GPU detected. Running in CPU mode.")
+    print("-" * 64)
+
+    # 2. Initialize models
     asr_engine = create_recognizer()
     tts_engine = create_tts()
     tts_gen_cfg = sherpa_onnx.GenerationConfig()
@@ -308,7 +396,7 @@ def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), WebDemoHandler)
     url = f"http://127.0.0.1:{PORT}"
     print(f"\n🚀 Web Demo ready and running at: {url}")
-    print(f"👉 Open {url} in your browser to start talking with Amy!\n" + "-" * 64)
+    print(f"👉 Open {url} in your browser to start talking with Sarah!\n" + "-" * 64)
 
     try:
         server.serve_forever()

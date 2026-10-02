@@ -185,6 +185,8 @@ body {
 .pill-green .indicator-dot { background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
 .pill-cyan .indicator-dot { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan); }
 .pill-purple .indicator-dot { background: var(--accent-purple); box-shadow: 0 0 8px var(--accent-purple); }
+.pill-amber .indicator-dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.pill-muted .indicator-dot { background: var(--text-muted); }
 
 .icon-button {
   background: var(--bg-card);

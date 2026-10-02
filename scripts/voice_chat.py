@@ -192,6 +192,7 @@ class LocalLlmClient:
         print(f"[LLM Engine] Starting local llama-server on port {LLM_PORT} with model: {LLM_MODEL.name}...")
         log_path = Path(os.environ.get("TMPDIR", "/tmp")) / "sherpa-onnx-llm.log"
         self.log = log_path.open("wb")
+        ngl = os.environ.get("LLM_NGL", "99")
         self.process = subprocess.Popen(
             [
                 binary,
@@ -200,6 +201,7 @@ class LocalLlmClient:
                 "--port", str(LLM_PORT),
                 "--ctx-size", "1024",
                 "--threads", str(LLM_THREADS),
+                "-ngl", ngl,
                 "--parallel", "1",
                 "--no-webui",
             ],
@@ -408,7 +410,7 @@ def create_recognizer() -> sherpa_onnx.OnlineRecognizer:
         sample_rate=SAMPLE_RATE,
         feature_dim=80,
         decoding_method="greedy_search",
-        provider="cpu",
+        provider=os.environ.get("SHERPA_PROVIDER", "cpu"),
     )
 
 
@@ -426,7 +428,7 @@ def create_tts() -> sherpa_onnx.OfflineTts:
         config = sherpa_onnx.OfflineTtsConfig(
             model=sherpa_onnx.OfflineTtsModelConfig(
                 kokoro=kokoro_cfg,
-                provider="cpu",
+                provider=os.environ.get("SHERPA_PROVIDER", "cpu"),
                 num_threads=TTS_THREADS,
             ),
             max_num_sentences=1,

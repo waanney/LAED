@@ -104,6 +104,11 @@ class WebDemoHandler(BaseHTTPRequestHandler):
         if path == "/":
             path = "/index.html"
 
+        if path == "/favicon.ico":
+            self.send_response(204)
+            self.end_headers()
+            return
+
         if path == "/api/status":
             tts_name = "Kokoro (af_heart)" if (KOKORO_DIR / "model.onnx").is_file() else TTS_DIR.name
             llm_model = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
@@ -206,6 +211,7 @@ class WebDemoHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
         # Send initial transcript event
+        print(f"[WebAPI] Speech transcribed ({asr_time_ms:.0f}ms): '{transcript}'")
         send_sse({"type": "transcript", "text": transcript, "asr_ms": round(asr_time_ms)})
 
         if not transcript:
@@ -230,6 +236,8 @@ class WebDemoHandler(BaseHTTPRequestHandler):
             gen_ms = (time.perf_counter() - t_gen_start) * 1000
             if first_audio_time is None:
                 first_audio_time = time.perf_counter()
+
+            print(f"[WebAPI] AI voice sentence #{sentence_idx} ({gen_ms:.0f}ms): '{sentence}'")
 
             # Encode audio to base64 WAV
             wav_bytes = samples_to_wav_bytes(np.asarray(audio.samples, dtype=np.float32), audio.sample_rate)

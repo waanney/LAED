@@ -206,6 +206,7 @@ class WebDemoHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self.path.split("?")[0]
+        session_id = self.headers.get("X-Session-ID", "default").strip() or "default"
 
         if path == "/api/chat-voice":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -220,7 +221,7 @@ class WebDemoHandler(BaseHTTPRequestHandler):
                 self.send_error(400, f"Invalid WAV audio: {e}")
                 return
 
-            self.handle_voice_chat(samples)
+            self.handle_voice_chat(samples, session_id)
 
         elif path == "/api/chat-text":
             content_length = int(self.headers.get("Content-Length", 0))
@@ -230,7 +231,12 @@ class WebDemoHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Empty text prompt")
                 return
 
-            self.handle_text_chat(user_text)
+            self.handle_text_chat(user_text, session_id)
+
+        elif path == "/api/reset-session":
+            if llm_client and session_id in llm_client.sessions:
+                del llm_client.sessions[session_id]
+            self.send_json({"status": "ok", "message": f"Session {session_id} reset"})
 
         else:
             self.send_error(404, "Endpoint not found")
@@ -244,7 +250,7 @@ class WebDemoHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def handle_voice_chat(self, samples: np.ndarray) -> None:
+    def handle_voice_chat(self, samples: np.ndarray, session_id: str = "default") -> None:
         """Processes voice: ASR -> Streaming LLM -> Sentence Chunking -> TTS -> SSE Output."""
         global asr_engine, tts_engine, llm_client, tts_gen_cfg
 
@@ -253,13 +259,13 @@ class WebDemoHandler(BaseHTTPRequestHandler):
         transcript = recognize(asr_engine, samples)
         asr_time_ms = (time.perf_counter() - t0) * 1000
 
-        self.stream_s2s_response(transcript, asr_time_ms)
+        self.stream_s2s_response(transcript, asr_time_ms, session_id)
 
-    def handle_text_chat(self, user_text: str) -> None:
+    def handle_text_chat(self, user_text: str, session_id: str = "default") -> None:
         """Processes text input directly into Streaming LLM -> TTS."""
-        self.stream_s2s_response(user_text, asr_time_ms=0)
+        self.stream_s2s_response(user_text, asr_time_ms=0, session_id=session_id)
 
-    def stream_s2s_response(self, transcript: str, asr_time_ms: float) -> None:
+    def stream_s2s_response(self, transcript: str, asr_time_ms: float, session_id: str = "default") -> None:
         global tts_engine, llm_client, tts_gen_cfg
 
         # Set up SSE headers
@@ -322,13 +328,13 @@ class WebDemoHandler(BaseHTTPRequestHandler):
             )
 
         try:
-            reply, ttft_sec = llm_client.stream_chat(transcript, on_sentence, on_token)
+            reply, ttft_sec = llm_client.stream_chat(transcript, on_sentence, on_token, session_id=session_id)
             total_duration_ms = (time.perf_counter() - llm_start) * 1000
             ttft_ms = ttft_sec * 1000
             ttfa_ms = ((first_audio_time - llm_start) * 1000) if first_audio_time else 0
 
             print(
-                f"[WebAPI] 📊 Turn complete [{gpu_tag}]: "
+                f"[WebAPI] 📊 [{session_id[:8]}] Turn complete [{gpu_tag}]: "
                 f"ASR {asr_time_ms:.0f}ms | TTFT {ttft_ms:.0f}ms | TTFA {ttfa_ms:.0f}ms | "
                 f"Total {total_duration_ms:.0f}ms | Sentences: {sentence_idx}"
             )

@@ -213,7 +213,24 @@ class LocalLlmClient:
         self.process: subprocess.Popen[bytes] | None = None
         self.log = None
         self.model_name = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
-        self.history: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        self.sessions: dict[str, list[dict[str, str]]] = {}
+
+    def get_session_history(self, session_id: str = "default") -> list[dict[str, str]]:
+        if session_id not in self.sessions:
+            # Prevent memory leaks: keep up to 100 active sessions
+            if len(self.sessions) > 100:
+                oldest = next(iter(self.sessions))
+                del self.sessions[oldest]
+            self.sessions[session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+        return self.sessions[session_id]
+
+    @property
+    def history(self) -> list[dict[str, str]]:
+        return self.get_session_history("default")
+
+    @history.setter
+    def history(self, val: list[dict[str, str]]) -> None:
+        self.sessions["default"] = val
 
     def _healthy(self) -> bool:
         for endpoint in (f"{self.url}/health", f"{self.url}/v1/models"):
@@ -284,16 +301,19 @@ class LocalLlmClient:
         transcript: str,
         on_sentence: Callable[[str], None],
         on_token: Callable[[str], None],
+        session_id: str = "default",
     ) -> tuple[str, float]:
         """Streams LLM tokens, chunks them into sentences, and returns (full_text, ttft_seconds)."""
-        self.history.append({"role": "user", "content": transcript})
+        history = self.get_session_history(session_id)
+        history.append({"role": "user", "content": transcript})
         # Keep sliding bounded window (system + last 6 messages)
-        self.history = self.history[:1] + self.history[-6:]
+        history = history[:1] + history[-6:]
+        self.sessions[session_id] = history
 
         payload = json.dumps(
             {
                 "model": self.model_name,
-                "messages": self.history,
+                "messages": history,
                 "temperature": 0.7,
                 "max_tokens": LLM_MAX_TOKENS,
                 "stream": True,
@@ -349,7 +369,7 @@ class LocalLlmClient:
 
         reply_str = "".join(full_reply).strip()
         if reply_str:
-            self.history.append({"role": "assistant", "content": reply_str})
+            self.sessions[session_id].append({"role": "assistant", "content": reply_str})
 
         return reply_str, ttft or 0.0
 

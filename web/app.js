@@ -49,6 +49,15 @@ function getBackendUrl() {
   return window.location.origin;
 }
 
+function getSessionId() {
+  let sid = sessionStorage.getItem('laed_session_id');
+  if (!sid) {
+    sid = 'user_' + Math.random().toString(36).substring(2, 10);
+    sessionStorage.setItem('laed_session_id', sid);
+  }
+  return sid;
+}
+
 // Audio Context & State
 let audioCtx = null;
 let micStream = null;
@@ -303,7 +312,10 @@ async function sendVoiceQuery(wavBlob) {
     const response = await fetch(`${backend}/api/chat-voice`, {
       method: 'POST',
       body: wavBlob,
-      headers: { 'Content-Type': 'audio/wav' }
+      headers: {
+        'Content-Type': 'audio/wav',
+        'X-Session-ID': getSessionId()
+      }
     });
 
     handleSseStream(response);
@@ -330,8 +342,11 @@ async function sendTextQuery(text) {
   try {
     const response = await fetch(`${backend}/api/chat-text`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: jsonStringify({ text })
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-ID': getSessionId()
+      },
+      body: JSON.stringify({ text })
     });
 
     handleSseStream(response);

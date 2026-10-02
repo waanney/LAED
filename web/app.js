@@ -199,6 +199,11 @@ function startRecording() {
   initMicrophone().then((ok) => {
     if (!ok) return;
 
+    // iOS Safari requirement: audio context must be explicitly resumed upon user gesture
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+
     audioQueue.stopAll();
     audioChunks = [];
     isRecording = true;
@@ -220,11 +225,20 @@ function startRecording() {
 
     const source = audioCtx.createMediaStreamSource(micStream);
     source.connect(recorderNode);
-    recorderNode.connect(audioCtx.destination);
+
+    // CRITICAL for iOS Safari / Mobile:
+    // Connecting directly to audioCtx.destination sends mic audio directly into phone speakers,
+    // causing an immediate acoustic feedback loop (buzzing / screaming sound).
+    // Instead, route through a zero-gain node so ScriptProcessor keeps firing without speaker feedback!
+    const silentGain = audioCtx.createGain();
+    silentGain.gain.value = 0;
+    recorderNode.connect(silentGain);
+    silentGain.connect(audioCtx.destination);
 
     window._activeRecorder = {
       source,
       recorderNode,
+      silentGain,
       recordedSamples
     };
   });
@@ -238,9 +252,12 @@ function stopRecording() {
   liveAiSpeech.textContent = 'Transcribing speech with Zipformer...';
 
   if (window._activeRecorder) {
-    const { source, recorderNode, recordedSamples } = window._activeRecorder;
-    source.disconnect();
-    recorderNode.disconnect();
+    const { source, recorderNode, silentGain, recordedSamples } = window._activeRecorder;
+    try {
+      source.disconnect();
+      recorderNode.disconnect();
+      if (silentGain) silentGain.disconnect();
+    } catch (e) {}
     window._activeRecorder = null;
 
     // Resample/Merge to 16kHz Float32

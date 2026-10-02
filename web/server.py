@@ -272,7 +272,20 @@ class WebDemoHandler(BaseHTTPRequestHandler):
                 }
             )
         except Exception as e:
+            print(f"[WebAPI] LLM Inference Error: {e}", file=sys.stderr)
             send_sse({"type": "error", "message": str(e)})
+            send_sse(
+                {
+                    "type": "done",
+                    "metrics": {
+                        "asr_ms": round(asr_time_ms),
+                        "ttft_ms": 0,
+                        "ttfa_ms": 0,
+                        "total_ms": round((time.perf_counter() - llm_start) * 1000),
+                        "sentences": 0,
+                    },
+                }
+            )
 
 
 def main() -> None:

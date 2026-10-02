@@ -199,8 +199,13 @@ class LocalLlmClient:
                 with urllib.request.urlopen(f"{self.url}/v1/models", timeout=1.0) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     models = [m.get("id") for m in data.get("data", []) if m.get("id")]
-                    if models and self.model_name not in models:
-                        self.model_name = models[0]
+                    if models:
+                        # Prioritize llama3.1:8b or any 8b/7b model over heavy 35b models
+                        preferred = [m for m in models if "llama3.1" in m.lower() or "8b" in m.lower() or "7b" in m.lower()]
+                        if preferred:
+                            self.model_name = preferred[0]
+                        elif self.model_name not in models:
+                            self.model_name = models[0]
                         print(f"[LLM Engine] Auto-selected active model: {self.model_name}")
             except Exception:
                 pass

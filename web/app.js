@@ -375,13 +375,22 @@ async function handleSseStream(response) {
         } else if (ev.type === 'audio_sentence') {
           // Play synthesized audio sentence immediately!
           audioQueue.enqueue(ev.audio);
+        } else if (ev.type === 'error') {
+          console.error('AI Error:', ev.message);
+          liveAiSpeech.textContent = `Error: ${ev.message}`;
+          setPhase('idle');
         } else if (ev.type === 'done') {
           if (ev.metrics) {
-            valTtft.innerHTML = `${ev.metrics.ttft_ms} <span class="unit">ms</span>`;
-            valTtfa.innerHTML = `${ev.metrics.ttfa_ms} <span class="unit">ms</span>`;
-            valTotal.innerHTML = `${(ev.metrics.total_ms / 1000).toFixed(1)} <span class="unit">s</span>`;
+            valTtft.innerHTML = `${ev.metrics.ttft_ms || 0} <span class="unit">ms</span>`;
+            valTtfa.innerHTML = `${ev.metrics.ttfa_ms || 0} <span class="unit">ms</span>`;
+            valTotal.innerHTML = `${((ev.metrics.total_ms || 0) / 1000).toFixed(1)} <span class="unit">s</span>`;
           }
-          appendChatMessage('ai', fullAiText, `TTFA: ${ev.metrics.ttfa_ms}ms`);
+          if (!audioQueue.isPlaying) {
+            setPhase('idle');
+          }
+          if (fullAiText.trim()) {
+            appendChatMessage('ai', fullAiText, `TTFA: ${ev.metrics?.ttfa_ms || 0}ms`);
+          }
         }
       } catch (err) {
         console.warn('Malformed SSE line:', dataStr);

@@ -180,6 +180,15 @@ class LocalLlmClient:
     def start(self) -> None:
         if self._healthy():
             print(f"[LLM Engine] Connected to active server at {self.url}")
+            try:
+                with urllib.request.urlopen(f"{self.url}/v1/models", timeout=1.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    models = [m.get("id") for m in data.get("data", []) if m.get("id")]
+                    if models and self.model_name not in models:
+                        self.model_name = models[0]
+                        print(f"[LLM Engine] Auto-selected active model: {self.model_name}")
+            except Exception:
+                pass
             return
 
         binary = os.environ.get("LLM_BIN") or shutil.which("llama-server")

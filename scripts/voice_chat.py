@@ -23,9 +23,23 @@ import sounddevice as sd
 
 
 ROOT = Path(__file__).resolve().parent.parent
-ASR_DIR = Path(os.environ.get("ASR_DIR", ROOT / "sherpa-onnx-streaming-zipformer-en-2023-06-26"))
-TTS_DIR = Path(os.environ.get("TTS_DIR", ROOT / "vits-piper-en_US-amy-low"))
-KOKORO_DIR = Path(os.environ.get("KOKORO_DIR", ROOT / "kokoro-en-v0_19"))
+
+def resolve_model_dir(env_name: str, rel_name: str) -> Path:
+    env_path = os.environ.get(env_name)
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+    for c in [
+        ROOT / rel_name,
+        ROOT / "models" / rel_name,
+        ROOT / "sherpa-onnx" / rel_name,
+    ]:
+        if c.exists():
+            return c
+    return ROOT / rel_name
+
+ASR_DIR = resolve_model_dir("ASR_DIR", "sherpa-onnx-streaming-zipformer-en-2023-06-26")
+TTS_DIR = resolve_model_dir("TTS_DIR", "vits-piper-en_US-amy-low")
+KOKORO_DIR = resolve_model_dir("KOKORO_DIR", "kokoro-en-v0_19")
 def resolve_default_llm() -> Path:
     env_path = os.environ.get("LLM_MODEL")
     if env_path and Path(env_path).is_file():
@@ -51,18 +65,21 @@ TTS_SID = int(os.environ.get("TTS_SID", "0"))  # 0: af_heart, 1: af_bella, 2: af
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "96"))
 LLM_PORT = int(os.environ.get("LLM_PORT", "18080"))
 LLM_URL = os.environ.get("LLM_URL", f"http://127.0.0.1:{LLM_PORT}")
+LLM_MODEL_NAME = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
 VAD_THRESHOLD = float(os.environ.get("VAD_THRESHOLD", "0.5"))
 VAD_SILENCE_SECONDS = float(os.environ.get("VAD_SILENCE_SECONDS", "0.5"))
 VAD_MAX_SPEECH_SECONDS = float(os.environ.get("VAD_MAX_SPEECH_SECONDS", "20"))
 TTS_SPEED = float(os.environ.get("TTS_SPEED", "1.0"))
 
 SYSTEM_PROMPT = (
-    "You are Sarah, an expert, friendly, and encouraging English teacher. "
-    "Your goal is to help the student practice conversational English naturally. "
-    "Always respond in clear, spoken English using one or two concise sentences. "
-    "If the student makes any grammatical, pronunciation, or vocabulary mistakes, "
-    "gently and naturally correct them in your response, then ask an engaging follow-up question. "
-    "Do not use markdown, bullet points, asterisks, or emoji, as your words will be spoken aloud."
+    "You are Sarah, an encouraging and patient native English teacher. "
+    "Your sole mission is to help the student practice spoken English naturally. "
+    "Always communicate strictly in natural, conversational English. "
+    "Keep your spoken responses short and natural, exactly 1 to 2 sentences (maximum 35 words). "
+    "If the student makes any grammatical, vocabulary, or phrasing errors, "
+    "first gently correct them in a friendly manner, then ask a brief follow-up question. "
+    "Never use emojis, markdown, asterisks, bullet points, or special characters, "
+    "as your text is directly synthesized into real-time speech."
 )
 
 ABBREVIATIONS = {
@@ -148,6 +165,7 @@ class LocalLlmClient:
         self.url = url.rstrip("/")
         self.process: subprocess.Popen[bytes] | None = None
         self.log = None
+        self.model_name = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
         self.history: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     def _healthy(self) -> bool:
@@ -211,7 +229,7 @@ class LocalLlmClient:
 
         payload = json.dumps(
             {
-                "model": "local-model",
+                "model": self.model_name,
                 "messages": self.history,
                 "temperature": 0.7,
                 "max_tokens": LLM_MAX_TOKENS,

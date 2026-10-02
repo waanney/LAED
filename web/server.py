@@ -19,11 +19,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
 
-# Ensure sherpa_onnx is in path
+# Ensure scripts and sherpa_onnx are in path
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
 SHERPA_DIR = ROOT / "sherpa-onnx"
-sys.path.insert(0, str(SHERPA_DIR / "sherpa-onnx/python"))
-sys.path.insert(0, str(SHERPA_DIR / "scripts"))
+if (SHERPA_DIR / "sherpa-onnx/python").is_dir():
+    sys.path.insert(0, str(SHERPA_DIR / "sherpa-onnx/python"))
+if (SHERPA_DIR / "scripts").is_dir():
+    sys.path.insert(0, str(SHERPA_DIR / "scripts"))
 
 from voice_chat import (
     create_recognizer,
@@ -79,9 +82,13 @@ def wav_bytes_to_samples(wav_bytes: bytes) -> tuple[np.ndarray, int]:
 
 class WebDemoHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
-        # Suppress noisy access logs; print only important events
-        if "/api/" in (args[0] if args else ""):
-            print(f"[WebAPI] {self.command} {args[0]} - {args[1]}")
+        # Suppress noisy static file logs; print only important events
+        try:
+            msg = format % args if args else format
+            if "/api/" in msg or "code 4" in msg or "code 5" in msg:
+                print(f"[WebAPI] {msg}")
+        except Exception:
+            pass
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
@@ -97,9 +104,13 @@ class WebDemoHandler(BaseHTTPRequestHandler):
 
         if path == "/api/status":
             tts_name = "Kokoro (af_heart)" if (KOKORO_DIR / "model.onnx").is_file() else TTS_DIR.name
+            llm_model = os.environ.get("LLM_MODEL_NAME", "Edge0-8B")
             self.send_json(
                 {
                     "status": "ok",
+                    "persona": "English Teacher (Sarah)",
+                    "language": "English",
+                    "llm_model": llm_model,
                     "llm_url": llm_client.url if llm_client else LLM_URL,
                     "asr_model": ASR_DIR.name,
                     "tts_model": tts_name,

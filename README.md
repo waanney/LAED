@@ -1,88 +1,99 @@
-# LAED
+# LAED Voice — AI English Teacher (Edge0-8B × Kokoro-TTS)
 
-Offline speech-to-speech MVP with a Flutter UI and a shared Rust core, derived from
-`Speech_to_Speech_Mobile_Plan.md`.
+Ultra-low latency conversational AI English Teacher Studio powered by:
+- **LLM**: **Edge0-8B** (or OpenAI-compatible streaming server) with **Teacher Sarah** persona (clear spoken English, gentle mistake corrections, 1–2 sentence conversational pacing).
+- **TTS**: **hexgrad/Kokoro-82M** (24kHz high-fidelity neural voice, `af_heart`).
+- **ASR**: **sherpa-onnx** Streaming Zipformer Transducer (offline 16kHz speech recognition).
+- **Frontend**: Responsive Single-Page Application (SPA) with 3D audio-reactive orb, live subtitles, latency HUD, and remote backend connectivity (deployable on **GitHub Pages**).
 
-```text
-Flutter microphone (PCM16) → Rust resample → ASR → bounded context → LLM → TTS
-                                                                ↓
-Flutter playback (WAV bytes) ←───────────────────────────────────┘
-```
+---
 
-## Architecture
-
-- Flutter owns presentation, microphone permission/capture, app lifecycle and playback.
-- Rust owns input validation, 15-second limit, resampling, the pipeline state sequence, monotonic
-  `turn_id`, stale-result rejection, bounded conversation history, prompt limits and WAV creation.
-- `flutter_rust_bridge` generates typed asynchronous bindings. The same Rust API can later generate
-  Swift bindings for iOS rather than duplicating pipeline logic.
-- A deterministic demo backend exercises every stage without claiming to perform real AI. The UI
-  labels demo mode explicitly.
-
-The real model adapters remain deliberately isolated behind Rust traits in `rust/src/engines.rs`.
-They are not faked: production mode refuses to start until pinned whisper.cpp, llama.cpp and
-sherpa-onnx adapters and model files are present.
-
-## Source map
+## ⚡ Architecture
 
 ```text
-lib/
-├── main.dart                              Flutter entry point
-└── src/presentation/                      Push-to-talk UI and platform audio
-rust/src/
-├── api/speech.rs                          Cross-platform public pipeline API
-├── audio.rs                               PCM validation/resampling/WAV
-├── engines.rs                             ASR/LLM/TTS traits and demo engines
-└── memory.rs                              Bounded complete exchanges
-docs/
-├── MODEL_BACKENDS.md                      Real runtime integration contract
-└── PLATFORM_SETUP.md                      Generated runners, bindings, permissions
+[ Browser / GitHub Pages ]
+  │
+  ├─ 🎤 Microphone (16kHz PCM Web Audio)
+  │      ↓  (POST /api/chat-voice)
+[ Backend Server / Vast.ai GPU ]
+  │
+  ├─ 1. Zipformer Streaming ASR (Speech → Text)
+  ├─ 2. Edge0-8B MoE LLM (Prompt: English Teacher Sarah)
+  │      ↓  (Streaming SSE Tokens)
+  ├─ 3. Sentence Chunker ([.!?\n] boundary detection)
+  ├─ 4. Kokoro-TTS Engine (Sentence N+1 synthesizes while N plays)
+  │      ↓  (SSE Audio Chunks: base64 WAV 24kHz)
+[ Browser AudioQueuePlayer ]
+  │
+  └─ 🔊 Continuous, seamless audio playback + 3D Orb Visualizer
 ```
 
-## Before the first build
+---
 
-This repository contains authored source only. Generate standard Flutter Android/iOS runners and
-the bridge glue using the pinned workflow in `docs/PLATFORM_SETUP.md`. Generated bridge files and
-model weights are intentionally ignored by Git.
+## 🚀 Quick Start (Local)
 
-No audio or transcripts are persisted. The example model manifest uses required placeholders for
-revisions, checksums and licenses; fill and verify them before distributing any weights.
+### 1. Download Model Weights
+Run the automated downloader to fetch Zipformer ASR, Silero VAD, and Kokoro-TTS:
+```bash
+./scripts/setup_models.sh
+```
 
-## Real-Time Speech-to-Speech Pipeline (Edge0 × sherpa-onnx)
+### 2. Launch the Web Studio
+```bash
+./run_web.sh
+```
+Open **[http://127.0.0.1:7860](http://127.0.0.1:7860)** in your browser.
 
-Integrated real-time streaming speech-to-speech assistant powered by:
-- **ASR**: `sherpa-onnx` Streaming Zipformer Transducer (16kHz offline speech-to-text)
-- **VAD**: Silero VAD (real-time voice activity detection)
-- **LLM**: `Edge0-8B` MoE with OpenAI-compatible SSE streaming endpoint
-- **TTS**: `hexgrad/Kokoro-82M` (`af_heart`) high-fidelity 24kHz neural speech
-- **Role**: AI English Teacher (Teacher Sarah) for conversational English practice
+---
 
-### Architecture
+## 🌐 Deploying to GitHub Pages + Vast.ai
+
+### Frontend (GitHub Pages)
+1. Push this repository to GitHub.
+2. Go to **Repository Settings** → **Pages**.
+3. Under **Build and deployment**, select **Deploy from a branch** and choose `/web` folder (or root).
+4. Your Web Studio will be live at `https://<username>.github.io/<repo-name>/`.
+
+### Backend (Vast.ai GPU Instance)
+1. Rent an instance on **Vast.ai** (Recommended: **1x RTX 3090 24GB**, Disk **60–80 GB**, PyTorch / CUDA image).
+2. Clone repo and download models:
+   ```bash
+   git clone https://github.com/waanney/LAED.git
+   cd LAED
+   ./scripts/setup_models.sh
+   ```
+3. Start the Web Server:
+   ```bash
+   python3 web/server.py
+   ```
+4. Expose an HTTPS endpoint via Cloudflare Tunnel (required because GitHub Pages enforces HTTPS):
+   ```bash
+   cloudflared tunnel --url http://127.0.0.1:7860
+   ```
+5. In your GitHub Pages UI, click the **Settings (⚙️)** button in the top right, enter your Cloudflare Tunnel HTTPS URL, and click **Connect**.
+
+---
+
+## 👩‍🏫 Persona & Prompt Configuration
+
+The model is configured with Teacher Sarah's persona:
+> *"You are Sarah, an encouraging and patient native English teacher. Your sole mission is to help the student practice spoken English naturally. Always communicate strictly in natural, conversational English. Keep your spoken responses short and natural, exactly 1 to 2 sentences (maximum 35 words). If the student makes any grammatical, vocabulary, or phrasing errors, first gently correct them in a friendly manner, then ask a brief follow-up question."*
+
+---
+
+## 📂 Project Structure
 
 ```text
-Microphone (16kHz) → Silero VAD → Zipformer ASR → Edge0-8B (Token Stream)
-                                                       ↓ (Sentence Chunker)
-Speaker Output (24kHz) ← Kokoro TTS (af_heart) ← Sentence Queue
+├── run_web.sh             # Launch Web Studio server
+├── run_s2s.sh             # Launch CLI terminal speech-to-speech
+├── scripts/
+│   ├── setup_models.sh    # Automated ASR, VAD, and Kokoro model downloader
+│   ├── voice_chat.py      # Core streaming S2S pipeline (Chunker, LLM SSE, Kokoro TTS)
+│   └── test_pipeline.py   # Benchmark test script
+├── web/
+│   ├── index.html         # Modern SPA UI with 3D canvas visualizer & HUD
+│   ├── style.css          # Glassmorphic dark theme with smooth micro-animations
+│   ├── app.js             # Web Audio API recorder, SSE parser, and audio queue player
+│   └── server.py          # Fast HTTP/SSE streaming backend
+└── .gitignore
 ```
-
-### Quick Start
-
-1. **Interactive Web Studio** (Browser UI with Audio Reactive Visualizer):
-   ```bash
-   ./run_web.sh
-   # Open http://127.0.0.1:7860
-   ```
-
-2. **Terminal Voice Chat**:
-   ```bash
-   ./run_s2s.sh
-   ```
-
-3. **Connecting Remote Backend (e.g. Vast.ai GPU)**:
-   ```bash
-   LLM_URL=https://your-vast-ai-tunnel.trycloudflare.com ./run_s2s.sh
-   ```
-
-4. **GitHub Pages Deployment**:
-   The `web/` directory is standalone and can be deployed directly to GitHub Pages. Use the in-app **Settings** modal to connect to your remote backend.
-

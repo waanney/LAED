@@ -1,34 +1,29 @@
-# Flutter / Dart
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-build/
-coverage/
-pubspec_overrides.yaml
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+env/
+venv/
 
-# IDE / OS
-*.iml
-.idea/
-.vscode/
-.DS_Store
-
-# Rust
-rust/target/
-
-# Generated flutter_rust_bridge glue
-lib/src/rust/frb_generated.dart
-lib/src/rust/frb_generated.io.dart
-lib/src/rust/frb_generated.web.dart
-rust/src/frb_generated.rs
-
-# Model weights never belong in Git/APK/IPA
+# AI Model weights & big binaries (do not commit to Git)
 models/
 *.bin
 *.gguf
 *.onnx
+*.tar.bz2
+*.tar.gz
+*.zip
 
-# Cloned upstream subtrees
+# Upstream submodules / cloned repositories
 Edge0/
 sherpa-onnx/
-__pycache__/
+build/
+
+# IDE & OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+*.log

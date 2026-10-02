@@ -1,0 +1,319 @@
+name: test-go-package
+
+on:
+  push:
+    branches:
+      - fix-go-2
+  schedule:
+    # minute (0-59)
+    # hour (0-23)
+    # day of the month (1-31)
+    # month (1-12)
+    # day of the week (0-6)
+    # nightly build at 15:50 UTC time every day
+    - cron: "50 15 * * *"
+
+  workflow_dispatch:
+
+concurrency:
+  group: test-go-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.repository_owner == 'csukuangfj' || github.repository_owner == 'k2-fsa'
+    name: "Test group ${{ matrix.index }} (${{ matrix.os }} ${{ matrix.arch }})"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS arm64
+          - os: macos-latest
+            arch: arm64
+            index: 0
+            tests: "hello-world non-streaming-decode-files speaker-identification source-separation"
+          - os: macos-latest
+            arch: arm64
+            index: 1
+            tests: "non-streaming-cohere-transcribe-decode-files non-streaming-qwen3-asr-decode-files supertonic-tts non-streaming-moonshine-v2-decode-files"
+          - os: macos-latest
+            arch: arm64
+            index: 2
+            tests: "non-streaming-fire-red-asr-ctc-decode-files zero-shot-pocket-tts zero-shot-zipvoice-tts non-streaming-funasr-nano-decode-files"
+          - os: macos-latest
+            arch: arm64
+            index: 3
+            tests: "non-streaming-medasr-ctc-decode-files non-streaming-omnilingual-asr-ctc-decode-files non-streaming-tts streaming-decode-files"
+          - os: macos-latest
+            arch: arm64
+            index: 4
+            tests: "non-streaming-canary-decode-files speech-enhancement-gtcrn speech-enhancement-dpdfnet streaming-speech-enhancement-gtcrn"
+          - os: macos-latest
+            arch: arm64
+            index: 5
+            tests: "streaming-speech-enhancement-dpdfnet audio-tagging keyword-spotting-from-file add-punctuation"
+          - os: macos-latest
+            arch: arm64
+            index: 6
+            tests: "add-punctuation-online non-streaming-speaker-diarization streaming-hlg-decoding"
+          # macOS x64
+          - os: macos-15-intel
+            arch: amd64
+            index: 0
+            tests: "hello-world non-streaming-decode-files speaker-identification source-separation"
+          - os: macos-15-intel
+            arch: amd64
+            index: 1
+            tests: "non-streaming-cohere-transcribe-decode-files non-streaming-qwen3-asr-decode-files supertonic-tts non-streaming-moonshine-v2-decode-files"
+          - os: macos-15-intel
+            arch: amd64
+            index: 2
+            tests: "non-streaming-fire-red-asr-ctc-decode-files zero-shot-pocket-tts zero-shot-zipvoice-tts non-streaming-funasr-nano-decode-files"
+          - os: macos-15-intel
+            arch: amd64
+            index: 3
+            tests: "non-streaming-medasr-ctc-decode-files non-streaming-omnilingual-asr-ctc-decode-files non-streaming-tts streaming-decode-files"
+          - os: macos-15-intel
+            arch: amd64
+            index: 4
+            tests: "non-streaming-canary-decode-files speech-enhancement-gtcrn speech-enhancement-dpdfnet streaming-speech-enhancement-gtcrn"
+          - os: macos-15-intel
+            arch: amd64
+            index: 5
+            tests: "streaming-speech-enhancement-dpdfnet audio-tagging keyword-spotting-from-file add-punctuation"
+          - os: macos-15-intel
+            arch: amd64
+            index: 6
+            tests: "add-punctuation-online non-streaming-speaker-diarization streaming-hlg-decoding"
+          # Linux x64
+          - os: ubuntu-latest
+            arch: amd64
+            index: 0
+            tests: "hello-world non-streaming-decode-files speaker-identification source-separation"
+          - os: ubuntu-latest
+            arch: amd64
+            index: 1
+            tests: "non-streaming-cohere-transcribe-decode-files supertonic-tts non-streaming-moonshine-v2-decode-files"
+          - os: ubuntu-latest
+            arch: amd64
+            index: 2
+            tests: "non-streaming-fire-red-asr-ctc-decode-files zero-shot-pocket-tts zero-shot-zipvoice-tts non-streaming-funasr-nano-decode-files"
+          - os: ubuntu-latest
+            arch: amd64
+            index: 3
+            tests: "non-streaming-medasr-ctc-decode-files non-streaming-omnilingual-asr-ctc-decode-files non-streaming-tts streaming-decode-files"
+          - os: ubuntu-latest
+            arch: amd64
+            index: 4
+            tests: "non-streaming-canary-decode-files speech-enhancement-gtcrn speech-enhancement-dpdfnet streaming-speech-enhancement-gtcrn"
+          - os: ubuntu-latest
+            arch: amd64
+            index: 5
+            tests: "streaming-speech-enhancement-dpdfnet audio-tagging keyword-spotting-from-file add-punctuation"
+          - os: ubuntu-latest
+            arch: amd64
+            index: 6
+            tests: "add-punctuation-online non-streaming-speaker-diarization streaming-hlg-decoding"
+          # Linux arm64
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            index: 0
+            tests: "hello-world non-streaming-decode-files speaker-identification source-separation"
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            index: 1
+            tests: "non-streaming-cohere-transcribe-decode-files non-streaming-qwen3-asr-decode-files supertonic-tts non-streaming-moonshine-v2-decode-files"
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            index: 2
+            tests: "non-streaming-fire-red-asr-ctc-decode-files zero-shot-pocket-tts zero-shot-zipvoice-tts non-streaming-funasr-nano-decode-files"
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            index: 3
+            tests: "non-streaming-medasr-ctc-decode-files non-streaming-omnilingual-asr-ctc-decode-files non-streaming-tts streaming-decode-files"
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            index: 4
+            tests: "non-streaming-canary-decode-files speech-enhancement-gtcrn speech-enhancement-dpdfnet streaming-speech-enhancement-gtcrn"
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            index: 5
+            tests: "streaming-speech-enhancement-dpdfnet audio-tagging keyword-spotting-from-file add-punctuation"
+          - os: ubuntu-22.04-arm
+            arch: arm64
+            index: 6
+            tests: "add-punctuation-online non-streaming-speaker-diarization streaming-hlg-decoding"
+          # Windows x64
+          - os: windows-2022
+            arch: x64
+            index: 0
+            tests: "hello-world non-streaming-decode-files"
+          - os: windows-2022
+            arch: x64
+            index: 1
+            tests: "non-streaming-cohere-transcribe-decode-files supertonic-tts non-streaming-moonshine-v2-decode-files"
+          - os: windows-2022
+            arch: x64
+            index: 2
+            tests: "non-streaming-fire-red-asr-ctc-decode-files zero-shot-pocket-tts zero-shot-zipvoice-tts non-streaming-funasr-nano-decode-files"
+          - os: windows-2022
+            arch: x64
+            index: 3
+            tests: "non-streaming-medasr-ctc-decode-files non-streaming-omnilingual-asr-ctc-decode-files non-streaming-tts streaming-decode-files"
+          - os: windows-2022
+            arch: x64
+            index: 4
+            tests: "non-streaming-canary-decode-files speech-enhancement-gtcrn speech-enhancement-dpdfnet streaming-speech-enhancement-gtcrn"
+          - os: windows-2022
+            arch: x64
+            index: 5
+            tests: "streaming-speech-enhancement-dpdfnet audio-tagging keyword-spotting-from-file add-punctuation"
+          - os: windows-2022
+            arch: x64
+            index: 6
+            tests: "add-punctuation-online non-streaming-speaker-diarization streaming-hlg-decoding speaker-identification"
+          # Windows x86 (source-separation skipped on x86)
+          - os: windows-2022
+            arch: x86
+            index: 0
+            tests: "hello-world non-streaming-decode-files"
+          - os: windows-2022
+            arch: x86
+            index: 1
+            tests: "non-streaming-cohere-transcribe-decode-files supertonic-tts non-streaming-moonshine-v2-decode-files"
+          - os: windows-2022
+            arch: x86
+            index: 2
+            tests: "non-streaming-fire-red-asr-ctc-decode-files zero-shot-pocket-tts zero-shot-zipvoice-tts non-streaming-funasr-nano-decode-files"
+          - os: windows-2022
+            arch: x86
+            index: 3
+            tests: "non-streaming-medasr-ctc-decode-files non-streaming-omnilingual-asr-ctc-decode-files non-streaming-tts streaming-decode-files"
+          - os: windows-2022
+            arch: x86
+            index: 4
+            tests: "non-streaming-canary-decode-files speech-enhancement-gtcrn speech-enhancement-dpdfnet streaming-speech-enhancement-gtcrn"
+          - os: windows-2022
+            arch: x86
+            index: 5
+            tests: "streaming-speech-enhancement-dpdfnet audio-tagging keyword-spotting-from-file add-punctuation"
+          - os: windows-2022
+            arch: x86
+            index: 6
+            tests: "add-punctuation-online non-streaming-speaker-diarization streaming-hlg-decoding speaker-identification"
+          # Windows arm64
+          - os: windows-11-arm
+            arch: arm64
+            index: 0
+            tests: "hello-world non-streaming-decode-files"
+          - os: windows-11-arm
+            arch: arm64
+            index: 1
+            tests: "non-streaming-cohere-transcribe-decode-files supertonic-tts non-streaming-moonshine-v2-decode-files"
+          - os: windows-11-arm
+            arch: arm64
+            index: 2
+            tests: "non-streaming-fire-red-asr-ctc-decode-files zero-shot-pocket-tts zero-shot-zipvoice-tts non-streaming-funasr-nano-decode-files"
+          - os: windows-11-arm
+            arch: arm64
+            index: 3
+            tests: "non-streaming-medasr-ctc-decode-files non-streaming-omnilingual-asr-ctc-decode-files non-streaming-tts streaming-decode-files"
+          - os: windows-11-arm
+            arch: arm64
+            index: 4
+            tests: "non-streaming-canary-decode-files speech-enhancement-gtcrn speech-enhancement-dpdfnet streaming-speech-enhancement-gtcrn"
+          - os: windows-11-arm
+            arch: arm64
+            index: 5
+            tests: "streaming-speech-enhancement-dpdfnet audio-tagging keyword-spotting-from-file add-punctuation"
+          - os: windows-11-arm
+            arch: arm64
+            index: 6
+            tests: "add-punctuation-online non-streaming-speaker-diarization streaming-hlg-decoding speaker-identification"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.17'
+
+      - name: Set up MinGW for x64
+        if: matrix.os == 'windows-2022' && matrix.arch == 'x64'
+        uses: csukuangfj/setup-mingw@v2.2.1
+        with:
+          platform: ${{ matrix.arch }}
+
+      - name: Set up MinGW for x86
+        if: matrix.os == 'windows-2022' && matrix.arch == 'x86'
+        uses: csukuangfj/setup-mingw@v2.2.1
+        with:
+          platform: ${{ matrix.arch }}
+          version: '12.2.0'
+
+      - name: Set GOARCH for x86
+        if: matrix.os == 'windows-2022' && matrix.arch == 'x86'
+        shell: bash
+        run: |
+          go env -w GOARCH=386
+          go env -w CGO_ENABLED=1
+
+      - name: Set up MSVC for ARM64
+        if: matrix.os == 'windows-11-arm' && matrix.arch == 'arm64'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
+      - name: Update version
+        shell: bash
+        run: |
+          ./new-release.sh
+          git diff .
+
+      - name: Copy DLLs to example directories (Windows)
+        if: matrix.os == 'windows-2022' || matrix.os == 'windows-11-arm'
+        shell: bash
+        env:
+          CC: ${{ matrix.os == 'windows-11-arm' && 'clang' || '' }}
+          CXX: ${{ matrix.os == 'windows-11-arm' && 'clang++' || '' }}
+        run: |
+          if [[ "${{ matrix.arch }}" == "x86" ]]; then
+            win_lib_dir=i686-pc-windows-gnu
+          elif [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            win_lib_dir=aarch64-pc-windows-gnu
+          else
+            win_lib_dir=x86_64-pc-windows-gnu
+          fi
+          # go mod tidy to download the module so DLLs are in the cache
+          cd go-api-examples/hello-world
+          go mod tidy
+          cd ../..
+          gopath=$(go env GOPATH)
+          win_mod=$(find "$gopath/pkg/mod/github.com/k2-fsa/" -maxdepth 1 -name "sherpa-onnx-go-windows@*" -type d | head -1)
+          for dir in go-api-examples/*/; do
+            if [ -f "$dir/go.mod" ]; then
+              cp -v "$win_mod/lib/$win_lib_dir"/*.dll "$dir" || true
+            fi
+          done
+
+      - name: Run tests
+        shell: bash
+        env:
+          CC: ${{ matrix.os == 'windows-11-arm' && 'clang' || '' }}
+          CXX: ${{ matrix.os == 'windows-11-arm' && 'clang++' || '' }}
+        run: |
+          for test in ${{ matrix.tests }}; do
+            echo "=== Running ${test} ==="
+            chmod +x .github/scripts/go/${test}.sh
+            .github/scripts/go/${test}.sh
+            echo "=== ${test} passed ==="
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: contains(matrix.tests, 'non-streaming-tts') || contains(matrix.tests, 'zero-shot-zipvoice-tts')
+        with:
+          name: tts-waves-${{ matrix.os }}-${{ matrix.arch }}
+          path: tts-waves

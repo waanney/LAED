@@ -3,11 +3,21 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.a
+*.o
 .venv/
 env/
 venv/
 
-# AI Model weights & big binaries (do not commit to Git)
+# Build trees & temporary artifacts
+build/
+build-*/
+**/build/
+**/build-*/
+CMakeFiles/
+CMakeCache.txt
+
+# AI Model weights & big archives (models downloaded via setup_models.sh)
 models/
 *.bin
 *.gguf
@@ -15,11 +25,13 @@ models/
 *.tar.bz2
 *.tar.gz
 *.zip
-
-# Upstream submodules / cloned repositories
-Edge0/
-sherpa-onnx/
-build/
+kokoro-en-v0_19/
+sherpa-onnx-streaming-zipformer-en-2023-06-26/
+vits-piper-en_US-amy-low/
+**/kokoro-en-v0_19/
+**/sherpa-onnx-streaming-zipformer-en-2023-06-26/
+**/vits-piper-en_US-amy-low/
+**/models/
 
 # IDE & OS
 .idea/
